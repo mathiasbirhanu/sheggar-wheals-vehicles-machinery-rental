@@ -1,0 +1,41 @@
+# Sheggar Wheels — local/self-hosted production stack
+# Usage:
+#   cp .env.example .env    # set SESSION_SECRET (openssl rand -hex 32)
+#   docker compose up --build
+# App: http://localhost:3000  ·  Health: http://localhost:3000/api/health
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sheggar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sheggar_demo_pw}
+      POSTGRES_DB: sheggarwheels
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sheggar -d sheggarwheels"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # Exposed only for local inspection with psql; remove in locked-down networks.
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://sheggar:${POSTGRES_PASSWORD:-sheggar_demo_pw}@db:5432/sheggarwheels
+      SESSION_SECRET: ${SESSION_SECRET:?Copy .env.example to .env and set SESSION_SECRET}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
