@@ -1,0 +1,6 @@
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.csproj.AssemblyReference.cache
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.GeneratedMSBuildEditorConfig.editorconfig
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.AssemblyInfoInputs.cache
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.AssemblyInfo.cs
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.csproj.CoreCompileInputs.cache
+/home/z/my-project/sheggar-src/backend/SheggarWheels.Api/obj/Debug/net8.0/SheggarWheels.Api.MvcApplicationPartsAssemblyInfo.cache
