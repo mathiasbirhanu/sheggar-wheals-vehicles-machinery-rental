@@ -1,0 +1,294 @@
+// Sheggar Wheels — Prisma schema (PostgreSQL)
+// Data model per SRS Chapter 5 (entities) and Chapter 6 (booking lifecycle, BR-01..12).
+// The SRS storage keys (sw_users_v1, sw_cars_v1, ...) map to these tables 1:1.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RENTER
+  OWNER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CarStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  INACTIVE
+}
+
+enum Transmission {
+  AUTOMATIC
+  MANUAL
+}
+
+// FR-32 (v2): fleet category — what the car runs on. Drives the browse filter,
+// the card/detail badges, and the owner listing form. PETROL is the default so
+// existing rows migrate without backfill.
+enum FuelType {
+  PETROL
+  DIESEL
+  HYBRID
+  ELECTRIC
+}
+
+// Booking lifecycle (SRS Ch.6): 8 states + post-resolution restore.
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+  DECLINED
+  CANCELLED
+  DISPUTED
+  RESOLVED
+}
+
+enum PaymentStatus {
+  UNPAID
+  HELD
+  PAID
+  REFUNDED
+}
+
+// Driving-licence review, decided by the car OWNER on each booking request
+// (Turo-style: renter submits licence with the request, owner approves/rejects).
+enum LicenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// FR-49: how the trip will be driven — chosen by the renter at request time.
+// Every licence travels WITH the request (Turo-style): the renter attaches their
+// own licence for SELF_DRIVE, the brought driver's licence for OWN_DRIVER, and
+// the car OWNER approves or rejects it together with the booking. No separate
+// platform-admin licence approval exists.
+enum DriveMode {
+  SELF_DRIVE   // renter drives — their own licence is attached to the request
+  OWN_DRIVER   // renter brings their own driver — the driver's licence is attached to the request
+  OWNER_DRIVER // the owner's professional driver comes with the car (extra fee/day set on the listing)
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+enum AnnouncementKind {
+  NEWS
+  EVENT
+  DISCOUNT
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique // BR-01: unique across the demo
+  name      String
+  phone     String?
+  // Email+password credentials (scrypt: "scrypt$N$r$p$salt$hash"). Nullable:
+  // null = Google-only account (created via OAuth, signs in with Google only).
+  passwordHash String?
+  roles     Role[] // FR-04: one account can be renter and owner
+  status    UserStatus @default(ACTIVE) // FR-06 / BR-10
+  // FR-48: OPTIONAL legal rental licence uploaded at owner registration.
+  // Nullable by design — owners may add it later; it is never blocking.
+  rentalLicenseDoc String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  cars           Car[]
+  renterBookings Booking[] @relation("BookingRenter")
+  ownerBookings  Booking[] @relation("BookingOwner")
+  reviewsAsRenter Review[] @relation("ReviewRenter")
+  reviewsAsOwner  Review[] @relation("ReviewOwner")
+  disputesOpened   Dispute[] @relation("DisputeOpener")
+  disputesResolved Dispute[] @relation("DisputeResolver")
+  notifications  Notification[]
+  announcements  Announcement[]
+}
+
+model Car {
+  id              String       @id @default(cuid())
+  ownerId         String
+  make            String
+  model           String
+  year            Int
+  transmission    Transmission
+  fuelType        FuelType     @default(PETROL) // FR-32 v2: petrol/diesel/hybrid/electric
+  seats           Int
+  city            String       @default("Addis Ababa")
+  neighbourhood   String
+  lat             Float
+  lng             Float
+  pricePerDay     Int // ETB, positive (FR-32)
+  description     String
+  photos          String[] // FR-34
+  // FR-47: technical valuation submitted with the listing. The column is
+  // nullable so existing rows survive `prisma db push` — the FORM and the
+  // zod schema make it required for every new/edited listing.
+  valuationDoc    String? // scanned technical valuation / inspection report (data URL)
+  valuationAmount Int? // owner-declared market value in ETB (optional)
+  // FR-49: OPTIONAL professional driver offered BY THE OWNER with this car.
+  // Null/absent = the car cannot be booked in OWNER_DRIVER mode; when set,
+  // the daily fee is added to the booking total and shares the 10% platform fee.
+  driverFeePerDay Int?
+  status          CarStatus    @default(PENDING) // BR-02: only APPROVED is public
+  unavailableDates DateTime[]  @default([]) // FR-35 / BR-05
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  owner   User      @relation(fields: [ownerId], references: [id])
+  bookings Booking[]
+  reviews  Review[]
+  announcements Announcement[] // discounts this car is running
+
+  @@index([status])
+  @@index([ownerId])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  carId          String
+  renterId       String
+  ownerId        String
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  days           Int
+  // Snapshots (BR-03/BR-04): frozen at request time.
+  // Discount is frozen too — an offer expiring later never rewrites an existing booking.
+  pricePerDay       Int
+  subtotal          Int // pre-discount: pricePerDay × days
+  discountPercent   Int @default(0) // 0 = no discount (BR-03: frozen at request)
+  discountAmount    Int @default(0) // ETB saved, rounded
+  fee               Int
+  total             Int
+  status         BookingStatus @default(REQUESTED)
+  paymentStatus  PaymentStatus @default(UNPAID) // FR-20/23/24
+  paymentRef     String? // SW-DEMO-XXXX (FR-24)
+  paymentMethod  String? // "TeleBirr" | "CBE Birr" | "M-Pesa" | "Chapa" — frozen at pay time (BR-03 spirit)
+  // Driving licence submitted WITH the rental request — reviewed by the car
+  // OWNER, who approves or rejects it together with the booking. Nullable in DB
+  // so pre-feature rows stay valid; zod requires it for new requests.
+  // FR-49 semantics by mode: SELF_DRIVE → the renter's own licence (PENDING,
+  // owner reviews); OWN_DRIVER → the brought driver's licence (PENDING, owner
+  // reviews); OWNER_DRIVER → none needed (the owner vouches for their own driver).
+  licenseNumber       String?       // licence number of whoever drives
+  licenseImage        String?       // data URL (resized in browser) or https link
+  licenseStatus       LicenseStatus @default(PENDING)
+  licenseDecisionNote String?       // optional owner note when rejecting
+  // FR-49: drive-mode snapshot (BR-03 spirit) — frozen with the price.
+  driveMode      DriveMode @default(SELF_DRIVE)
+  driverName     String?   // OWN_DRIVER only: full name of the driver the renter brings
+  driverFeePerDay Int     @default(0) // snapshot: owner-driver fee/day (0 unless OWNER_DRIVER)
+  driverTotal    Int       @default(0) // snapshot: driverFeePerDay × days
+  // FR-51 clickwrap proof: WHICH terms the renter accepted and WHEN, stamped
+  // by the SERVER (never the client) at the two contract moments. Nullable so
+  // pre-feature rows survive `prisma db push` without a backfill.
+  termsVersion         String?   // rental rules version accepted at request time (lib/terms.ts)
+  termsAgreedAt        DateTime? // request-moment timestamp
+  paymentTermsVersion  String?   // payment & escrow terms version accepted at checkout
+  paymentTermsAgreedAt DateTime? // checkout-moment timestamp
+  statusBeforeDispute BookingStatus?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  car     Car       @relation(fields: [carId], references: [id])
+  renter  User      @relation("BookingRenter", fields: [renterId], references: [id])
+  owner   User      @relation("BookingOwner", fields: [ownerId], references: [id])
+  review  Review?
+  disputes Dispute[]
+
+  @@index([carId, status])
+  @@index([renterId, status])
+  @@index([ownerId, status])
+}
+
+model Review {
+  id         String    @id @default(cuid())
+  bookingId  String    @unique // BR-06: exactly one review per booking
+  carId      String
+  renterId   String
+  ownerId    String
+  rating     Int // 1..5
+  comment    String
+  ownerReply String?
+  repliedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  car     Car     @relation(fields: [carId], references: [id])
+  renter  User    @relation("ReviewRenter", fields: [renterId], references: [id])
+  owner   User    @relation("ReviewOwner", fields: [ownerId], references: [id])
+
+  @@index([carId])
+  @@index([ownerId])
+}
+
+model Dispute {
+  id              String        @id @default(cuid())
+  bookingId       String
+  openedById      String
+  reason          String
+  status          DisputeStatus @default(OPEN)
+  resolutionNotes String?
+  resolvedById    String?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  openedBy  User    @relation("DisputeOpener", fields: [openedById], references: [id])
+  resolvedBy User?  @relation("DisputeResolver", fields: [resolvedById], references: [id])
+
+  @@index([status])
+  @@index([bookingId])
+}
+
+model Announcement {
+  id         String   @id @default(cuid())
+  title      String
+  body       String
+  kind       AnnouncementKind @default(NEWS)
+  discountPercent Int?
+  // A DISCOUNT can target exactly one car — that's what puts the −N% badge on
+  // its card and applies the math to bookings of that car. Null = banner-only.
+  carId      String?
+  validUntil DateTime?
+  active     Boolean  @default(true)
+  createdById String
+  createdAt  DateTime @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+  car       Car? @relation(fields: [carId], references: [id])
+
+  @@index([active, kind, validUntil]) // home banner query: active + kind + not expired
+  @@index([carId, active, kind])      // per-car badge lookup: this car, live discounts
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+}
