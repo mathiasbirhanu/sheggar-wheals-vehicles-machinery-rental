@@ -1,0 +1,22 @@
+# Keep the build context lean: only source + config ship to the daemon.
+node_modules
+.next
+.pg
+.pgdata
+db
+download
+assets
+scripts
+tests
+examples
+skills
+upload
+tool-results
+agent-ctx
+.zscripts
+*.log
+.env
+Caddyfile
+Dockerfile
+docker-compose.yml
+.gitignore
