@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Sheggar Wheels — ASP.NET Core 8 Web API.
+       This project replaces the Next.js backend (server actions + API routes + Prisma)
+       1:1: same database, same business rules, same responses — C# instead of TypeScript. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>SheggarWheels.Api</RootNamespace>
+    <AssemblyName>SheggarWheels.Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EF Core 8 + PostgreSQL (Npgsql). Talks to the SAME Supabase Postgres the
+         Prisma schema created — no migrations are shipped; the schema already exists. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+  </ItemGroup>
+
+</Project>
