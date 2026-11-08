@@ -1,0 +1,21 @@
+# Render blueprint — deploys the Sheggar Wheels C# backend with ONE click
+# (or `render blueprint launch` from the CLI). The frontend stays on Vercel.
+services:
+  - type: web
+    name: sheggar-wheels-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # paste your Supabase connection string in the dashboard
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SEED_TOKEN
+        generateValue: true
