@@ -1,0 +1,75 @@
+SHEGGAR WHEELS — START HERE (the COMPLETE project)
+==================================================
+
+YES — this zip is the WHOLE project, not a patch.
+
+Every file is the latest version of everything built so far:
+  • Home, browse, map search, car pages, photo gallery
+  • Bookings with the 3 drive modes (self-drive / own driver / owner's driver)
+  • Driving licence travels WITH the booking request — the CAR OWNER
+    approves or declines it together with the booking (no admin step)
+  • Rental rules + payment terms dialogs, proof stamped in the database
+  • Checkout (TeleBirr, CBE Birr, M-Pesa, Chapa) + receipts
+  • Reviews, disputes, notifications (auto-refresh every 15s),
+    owner earnings, admin console, CSV exports
+  • Sign-in with email+password (demo password: Sheggar!2026)
+    and optional Google sign-in
+
+It also includes: .env.example, README-INSTALL.md (full setup guide),
+prisma schema + demo seed, Docker files.
+
+WHAT IS *NOT* INSIDE (normal!)
+------------------------------
+  • node_modules/  → you create it yourself with "npm install" (step 3 below)
+  • .env           → you create it from .env.example (step 4 below)
+
+───────────────────────────────────────────────────────────────────────────
+WAY 1 — FRESH START (recommended, 10 minutes, use this for the demo)
+───────────────────────────────────────────────────────────────────────────
+1. Extract this zip into a NEW empty folder, e.g.  C:\sheggar-wheels
+2. Open a terminal IN that folder.
+3. Install dependencies (needs Node.js 20+):
+       npm install
+4. Create your environment file:
+       cp .env.example .env        (Windows: copy .env.example .env)
+   Open .env and set DATABASE_URL to your Postgres
+   (Supabase: Settings → Database → Connection string → URI)
+   and set SESSION_SECRET to any long random text.
+5. Create the database tables + demo data:
+       npx prisma db push
+       npm run db:seed
+6. Run it:
+       npm run dev
+   → open http://localhost:3000  (sign in: yonas@sheggarwheels.et /
+   Sheggar!2026 — the sign-in page also lists every demo account)
+
+───────────────────────────────────────────────────────────────────────────
+WAY 2 — COPY-PASTE INTO YOUR EXISTING PROJECT
+───────────────────────────────────────────────────────────────────────────
+If you already have a working project folder and just want the newest code:
+
+1. Extract this zip. You get folders: src, prisma, public, scripts
+   and files: package.json, .env.example, configs, READMEs.
+2. Drag EACH folder and EACH file onto your project root (the same
+   level as your package.json) and choose "Replace files".
+   The important ones:  src  ·  prisma  ·  package.json  ·  .env.example
+3. In your project terminal:
+       npx prisma db push        (adds the new columns — keeps your data)
+       npm run dev               (restart it: Ctrl+C first if running)
+4. Hard-refresh the browser:  Ctrl+Shift+R
+
+⚠ Do NOT copy node_modules between machines — always use "npm install".
+
+───────────────────────────────────────────────────────────────────────────
+QUICK TEST THAT EVERYTHING WORKS (2 minutes)
+───────────────────────────────────────────────────────────────────────────
+1. Sign in as yonas@sheggarwheels.et (renter) → open any car → pick dates
+   → "I'll drive myself" → type a licence number + attach any photo.
+2. Tick the rental rules → "Agree & send request".
+3. Sign out → sign in as daniel@sheggarwheels.et (owner of the Bole cars)
+   → My listings → the car → Bookings → you see the licence with
+   "licence pending review" → Approve.
+4. Back as Yonas → My trips → pay at checkout (tick the payment terms).
+5. The receipt page shows which rules versions were accepted and when.
+
+Full details: README-INSTALL.md
